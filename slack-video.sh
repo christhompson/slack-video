@@ -11,6 +11,20 @@ WIDTH=70
 APPDIR=~/.slack-video/
 LOCK=$APPDIR/lock
 
+# ARGS
+if [ -z "$TOKEN" ]; then
+    echo "Must set TOKEN environment variable with slack API token"
+    exit 1
+fi
+
+if [ ! $# -eq 1 ]; then
+    echo "Must provide video file as only argument."
+    exit 1
+fi
+
+videofile=$1
+
+# FUNCTIONS
 function videoToJpgs {
     # Convert video to images using FFMPEG
     # $1 is path of video file to convert
@@ -76,16 +90,6 @@ function endVideo {
 # MAIN #
 ########
 
-if [ -z "$TOKEN" ]; then
-    echo "Must set TOKEN environment variable with slack API token"
-    exit 1
-fi
-
-if [ ! $# -eq 1 ]; then
-    echo "Must provide video file as only argument."
-    exit 1
-fi
-
 mkdir -p $APPDIR
 
 # mkdir is be atomic on *nix, so we use it for a mutex.
@@ -99,14 +103,14 @@ fi
 
 # Extract basename without extension of the video file
 # See SO #2664740
-videoname=$(basename $1)
+videoname=$(basename $videofile)
 videoname=${s%.*}
 
 # Create dir for the thumbnails and convert to JPG
-if [ ! -e "$APPDIR/thumbs/$videoname/" ]; then
+if ! mkdir "$APPDIR/thumbs/$videoname"; then
     echo "Video not yet converted to thumbs. Converting, please wait..."
     mkdir -p "$APPDIR/thumbs/$videoname/"
-    videoToJpgs $1 "$APPDIR/thumbs/$videoname/"
+    videoToJpgs $videofile "$APPDIR/thumbs/$videoname/"
 fi
 
 echo "Creating new slack message player in #video-player. Playback starts in 10s."
