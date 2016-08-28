@@ -15,7 +15,7 @@ LOCK=$APPDIR/lock
 function videoToJpgs {
     # Convert video to images using FFMPEG
     # $1 is path of video file to convert
-    ffmpeg -i $1 -vf fps=$FPS $2/thumb%10d.jpg >/dev/null 2>/dev/null
+    ffmpeg -i "$1" -vf fps=$FPS "$2/thumb%10d.jpg" >/dev/null 2>/dev/null
 }
 
 function newMsg {
@@ -103,14 +103,14 @@ fi
 
 # Extract basename without extension of the video file
 # See SO #2664740
-videoname=$(basename $videofile)
+videoname=$(basename "$videofile")
 videoname=${videoname%.*}
 
 # Create dir for the thumbnails and convert to JPG
 if [ ! -e "$APPDIR/thumbs/$videoname" ]; then
     echo "Video not yet converted to thumbs. Converting, please wait..."
     mkdir -p "$APPDIR/thumbs/$videoname/"
-    videoToJpgs $videofile "$APPDIR/thumbs/$videoname/"
+    videoToJpgs "$videofile" "$APPDIR/thumbs/$videoname/"
 fi
 
 echo "Creating new slack message player in #video-player. Playback starts in 10s."
@@ -118,11 +118,11 @@ timestamp=$(newMsg $videoname)
 
 sleep 10
 
-FILES="$APPDIR/thumbs/$videoname/*"
-for f in $FILES
+for f in "$APPDIR/thumbs/$videoname"/*
 do
   echo "Displaying file $f..."
-  showFrame $videoname $timestamp "$(jp2a --width=$WIDTH $f)"
+  ASCII=`jp2a --width=$WIDTH "$f"`
+  showFrame "$videoname" "$timestamp" "$ASCII"
 done
 
 endVideo $timestamp
