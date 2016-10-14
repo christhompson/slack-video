@@ -1,12 +1,14 @@
 #!/bin/bash
 
+# set -x
+
 #################
 # CONFIGURATION #
 #################
 CHANNEL="C1KSMEQ76"  # Run in channel #video-player
 MESSAGE="Let's watch a video! Expand attachment to watch!"
 ENDMESSAGE="Thanks for watching!"
-FPS=1
+FPS=2
 WIDTH=70
 APPDIR=~/.slack-video/
 LOCK=$APPDIR/lock
@@ -40,7 +42,7 @@ function newMsg {
 }
 
 function showFrame {
-    # $1 is videoname, $2 is timestamp, $3 is frame
+    # $1 is videoname, $2 is timestamp, $3 is frame, $4 is current subtitle
     # Displays frame as an attachment to the message.
     curl https://slack.com/api/chat.update -X POST \
     -d "token=$TOKEN" \
@@ -53,6 +55,13 @@ function showFrame {
              \"pretext\": \"Video is playing...\",
              \"title\": \"$1\",
              \"text\": \"\`\`\`$3\`\`\`\",
+             \"mrkdwn_in\": [
+                 \"text\"
+             ]
+         },
+         {
+             \"title\": \"subtitle\",
+             \"text\": \"\`\`\`$4\`\`\`\",
              \"mrkdwn_in\": [
                  \"text\"
              ]
@@ -73,6 +82,13 @@ function endVideo {
     -d "pretty=1" 1> /dev/null 2> /dev/null
 }
 
+function secToTime {
+    # $1 is time in seconds
+    i=$1
+    ((sec=i%60, i/=60, min=i%60, hrs=i/60))
+    printf "%01d:%02d:%02d" $hrs $min $sec
+}
+
 ########
 # MAIN #
 ########
@@ -83,12 +99,13 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 
-if [ ! $# -eq 1 ]; then
-    echo "Must provide video file as only argument."
+if [ ! $# -ge 1 ]; then
+    echo "Must provide at least video file as an argument."
     exit 1
 fi
 
 videofile=$1
+subfile=$2
 
 mkdir -p $APPDIR
 
@@ -122,7 +139,30 @@ for f in "$APPDIR/thumbs/$videoname"/*
 do
   echo "Displaying file $f..."
   ASCII=`jp2a --width=$WIDTH "$f"`
-  showFrame "$videoname" "$timestamp" "$ASCII"
+
+  # int(basename($f)) / $fps = time in video in seconds, then convert to H:MM:SS
+  seconds=$(expr $(basename -s .jpg $f | cut -b6-) / $FPS)
+  before=$(expr $time - 1)
+  after=$(expr $time + 1)
+  currentTime=$(secToTime $time)
+  beforeTime=$(secToTime $before)
+  afterTime=$(secToTime $after)
+
+  # Extract dialog from matching timestamps, remove formatting
+  lines=$(egrep "($currentTime\.\d\d)|($beforeTime\.\d\d)|($afterTime\.\d\d)" $subfile)
+  linesDialog=$(printf "$lines" | cut -d',' -f10-)
+  linesDialog=$(printf "$linesDialog" | sed -e 's/{[^}]*}//g' | sed -e 's/\\N/ /g')
+
+  # Pad with newlines to 5 lines to reduce display jitter
+  numLines=$(echo $linesDialog | egrep '.+' | wc -l | tr -dc '0-9')
+  numPad=$(expr 5 - $numLines)
+  for i in $(seq 1 $numPad); do linesDialog="$linesDialog\n"; done
+
+  # Show frame and all matching subs
+  showFrame "$videoname" "$timestamp" "$ASCII" "$linesDialog"
+
+  # Frame rate limit by sleeping a short bit
+  sleep $(echo "scale=2;1.0/$FPS" | bc)
 done
 
 endVideo $timestamp
